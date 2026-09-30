@@ -28,10 +28,11 @@ services:
       DEPLOY_KEY_ENCRYPTION_KEY: ${DEPLOY_KEY_ENCRYPTION_KEY:?укажите DEPLOY_KEY_ENCRYPTION_KEY в .env}
       PORT: 3000
       BUILD_LOGS_DIR: /data/build-logs
-      BUILD_WORKDIR_CONTAINER_PATH: /data/build-workdir
-      # Тот же абсолютный путь, что источник bind-mount ниже — backend ходит в Docker
-      # через сокет хоста, и Docker-демон резолвит bind-mount'ы контейнеров сборки
-      # относительно ХОСТА, а не относительно самого backend-контейнера.
+      # Оба пути — один и тот же путь хоста: backend ходит в Docker через сокет хоста, и
+      # демон резолвит bind-mount'ы контейнеров относительно ХОСТА. Для compose-деплоя
+      # совпадение обязательно — относительные пути compose-файла CLI делает абсолютными
+      # по файловой системе backend (compose-deploy.service.ts).
+      BUILD_WORKDIR_CONTAINER_PATH: ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}
       BUILD_WORKDIR_HOST_PATH: ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}
       # Email первого администратора — используется только при старте на пустой базе,
       # сгенерированный пароль печатается в `docker compose logs backend`.
@@ -40,7 +41,7 @@ services:
       # Сокет только в backend — никогда не пробрасывается в контейнеры сборки/деплоя (раздел 7 CLAUDE.md).
       - /var/run/docker.sock:/var/run/docker.sock
       - build-logs:/data/build-logs
-      - ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}:/data/build-workdir
+      - ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}:${RANGER_WORKDIR_HOST_PATH}
 
   frontend:
     build: ./apps/frontend

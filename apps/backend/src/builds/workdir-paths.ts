@@ -25,3 +25,19 @@ export function toHostPath(containerPath: string): string {
   }
   return containerPath.replace(WORKDIR_CONTAINER_ROOT, WORKDIR_HOST_ROOT);
 }
+
+// Compose-деплой запускает `docker compose` из самого backend: относительные пути в
+// compose-файле (bind-mount `./conf:/etc/app`, контекст сборки) CLI превращает в
+// абсолютные по своей файловой системе и отдаёт демону, а демон резолвит их на хосте.
+// Поэтому директория должна быть смонтирована в backend по тому же пути, что на хосте
+// (docker-compose.yml так и делает).
+export function workdirPathsMatch(): boolean {
+  return WORKDIR_HOST_ROOT === WORKDIR_CONTAINER_ROOT;
+}
+
+// Отдельная директория на каждый деплой, а не одна на проект: у сервисов с
+// относительными bind-mount'ами меняется путь источника, и compose пересоздаёт их со
+// свежими файлами, а контейнеры предыдущего деплоя не теряют свои файлы до замены.
+export function composeDeploysDir(projectId: string): string {
+  return join(WORKDIR_CONTAINER_ROOT, 'deploys', projectId);
+}

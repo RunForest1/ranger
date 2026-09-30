@@ -16,6 +16,8 @@ export interface AppUser {
   createdAt: string;
 }
 
+export type DeployMode = 'container' | 'compose';
+
 export interface Project {
   id: string;
   name: string;
@@ -29,6 +31,8 @@ export interface Project {
   containerPort: number | null;
   hostPort: number | null;
   isPublic: boolean;
+  deployMode: DeployMode;
+  composeFile: string;
   envKeys: string[];
   deployKey: { id: string } | null;
 }

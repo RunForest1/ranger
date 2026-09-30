@@ -36,6 +36,8 @@ Three priorities follow from that:
   image build → stop the old container → start the new one → health check →
   automatic rollback to the previous image on failure. Plus manual rollback to any
   earlier successful build.
+- **Docker Compose deploy** — `docker compose up` with a file from the repository:
+  multiple services, their own volumes and networks. Only an admin can enable it.
 - **Environment variables** — set in project settings, passed to both the build steps
   and the deployed container. Stored encrypted, never shown after saving, masked in
   the build log.
@@ -213,10 +215,15 @@ within 30 seconds. If not, Ranger restores the previous working image.
 A deployed container is named `ranger-deploy-<project id>`, restarts on its own
 (`unless-stopped`) and survives a server reboot.
 
+If the project needs several services (app + database + worker), use
+[Docker Compose deploy](#docker-compose-deploy) instead of a single container.
+
 ## Security
 
 - The Docker socket is available only to the backend — it is never passed into build
-  or deploy containers.
+  containers or single-container deploys. Compose deploy is a deliberate exception:
+  the compose file decides what to mount, so only an admin can enable that mode (see
+  the compose section).
 - Build steps: no `--privileged`, all capabilities dropped, `no-new-privileges`,
   memory/CPU/process limits, a forced timeout.
 - Deploy keys and environment variables are encrypted at the application level
@@ -338,6 +345,115 @@ runs low: `docker image prune`, or remove unneeded `ranger-deploy-*` images by h
 
 When a project is deleted, its container is stopped and removed.
 
+## Docker Compose deploy
+
+The second deploy mode, for projects made of several services: an app, a database,
+a worker and so on. Instead of a single container, Ranger runs `docker compose up`
+with a compose file from the repository.
+
+### Enabling it
+
+Admin only: "Edit project" → the "Deploy mode" card → **Docker Compose** and the file
+path relative to the repository root (`docker-compose.yml` by default). The change is
+written to the audit log (`change_deploy_mode`).
+
+- Switching modes stops whatever was deployed in the old mode: the single container is
+  removed, or the compose project gets `docker compose down`.
+- The new mode takes effect from the next build of the main branch.
+- The project's ports aren't used in this mode — the compose file publishes its own
+  (`ports:`).
+
+### What happens on deploy
+
+After install/test/build succeed:
+
+1. The checkout is copied into a directory for this deploy:
+   `<RANGER_WORKDIR_HOST_PATH>/deploys/<project id>/<build id>`.
+2. Ranger runs:
+   ```bash
+   docker compose -p ranger-compose-<project id> -f <file> \
+     up -d --build --remove-orphans --wait --wait-timeout 120
+   ```
+   `--build` builds images for services with `build:`. `--wait` waits for every
+   service to start and for services with a `healthcheck` to become healthy.
+3. If compose exits with an error or doesn't finish within 20 minutes, the deploy is
+   marked failed. Services **stay as they are** — this mode has no rollback; the cause
+   is in the build log.
+4. The current and previous deploy directories are kept; older ones are deleted.
+
+Each deploy lives in a new directory. So compose recreates services with relative bind
+mounts (`./nginx.conf:/etc/nginx/nginx.conf`) with fresh files, and leaves services
+without them (say, a database on a named volume) alone unless their image or config
+changed.
+
+### Compose file requirements
+
+- **Data only in named volumes** (`db-data:/var/lib/postgresql/data`) or absolute host
+  paths. A relative path (`./data:/data`) points into one deploy's directory, which is
+  deleted a deploy later — the data will be lost.
+- **`restart: unless-stopped`** — set it yourself, otherwise services won't come back
+  after a server reboot.
+- **A `healthcheck`** on every long-running service is recommended — without one,
+  `--wait` considers the service ready as soon as its container starts.
+- **Ports** go in `ports:`; make sure they don't clash with other projects on the server.
+- If a service needs the Docker socket or a host path, mount them explicitly, with an
+  absolute host path. For working directories a service hands to the Docker daemon,
+  the path inside the container must match the path on the host.
+
+### Environment variables in compose
+
+Compose receives **only** the project's variables (plus `PATH`, `HOME`, `DOCKER_HOST`),
+not Ranger's own environment. That way a compose file can't pull in
+`DEPLOY_KEY_ENCRYPTION_KEY` or `SESSION_SECRET`. Use them in two ways:
+
+```yaml
+services:
+  app:
+    environment:
+      API_URL: ${API_URL}      # substitute the value
+      SECRET_TOKEN:            # pass the variable through as is
+```
+
+Compose also reads a `.env` next to the compose file, as usual. Don't put secrets
+there — that's what project variables are for.
+
+### What this mode doesn't have
+
+- **Rollback** — neither automatic nor manual. To go back, rebuild the commit (branch)
+  you need, or fix and build again.
+- **A shell in the container** on the "Console" tab — a compose project has several
+  services. The working-directory shell works.
+- **Metrics on the project tab** — the services are on the "Containers" page, grouped
+  under the project name, along with their logs.
+
+### Compose mode security
+
+A compose file can request `privileged`, the Docker socket, or mount the host's `/` —
+that is, get root on the server. Therefore:
+
+- **only an admin** enables the mode and changes the file path, and it's audited;
+- **only an admin** changes a compose project's repository and branch — otherwise an
+  operator could swap in a different compose file;
+- anyone who can push to the repository's main branch effectively has root on the
+  server. Enable this mode only for your own repositories.
+
+Operators can still change the project's environment variables. If the compose file
+substitutes them into paths (`- ${DATA_DIR}:/data`), that's another way to mount an
+arbitrary host path — don't use variables in `volumes:`.
+
+### Deleting the project
+
+Ranger runs `docker compose down --remove-orphans` and deletes the deploy directories.
+**Named volumes are kept** — remove them by hand if you don't need the data:
+
+```bash
+docker volume ls --filter label=com.docker.compose.project=ranger-compose-<project id>
+docker volume rm <name>
+```
+
+Service images (`ranger-compose-<id>-<service>`) left over from rebuilds dangle:
+`docker image prune`.
+
 ## Project environment variables
 
 Project settings → "Environment variables". The values reach:
@@ -380,7 +496,7 @@ Rules:
 The project's "Console" tab, `admin` only. This is not a host shell; two options exist.
 
 - **Shell in the project's container** — `exec` into the project's deployed container
-  (the project must be deployed and the container running).
+  (the project must be deployed as a single container, and the container running).
 - **Shell in the working directory** — a throwaway `ranger-builder` container over the
   last checkout, `/workspace`. No network, 512 MB, 1 CPU, 256 processes.
 
@@ -416,6 +532,7 @@ aren't written to the audit log — there's no "user", and the "triggered by" fi
 | Create, edit and delete projects | | ✓ | ✓ |
 | Replace the deploy key, edit environment variables | | ✓ | ✓ |
 | Roll back a deploy | | ✓ | ✓ |
+| Deploy mode (Docker Compose), a compose project's repository and branch | | | ✓ |
 | View the decrypted deploy key and variable values | | | ✓ |
 | Terminal | | | ✓ |
 | Manage users | | | ✓ |
@@ -432,7 +549,7 @@ password; the rest of the API and WebSocket is closed to them.
 ## Audit log
 
 Visible to admins only, on the "Audit log" tab. Recorded: a user triggering a build, a
-deploy rollback, viewing a deploy key, viewing environment variables, entering the
+deploy rollback, a deploy-mode change, viewing a deploy key, viewing environment variables, entering the
 terminal, creating and changing users, and password resets. Each entry shows who, what,
 on what, and when.
 
@@ -461,7 +578,7 @@ without compose):
 | `DATABASE_URL` | — | PostgreSQL connection string |
 | `PORT` | `3000` | Backend port |
 | `BUILD_WORKDIR_HOST_PATH` | — | Checkout path on the host (in compose = `RANGER_WORKDIR_HOST_PATH`) |
-| `BUILD_WORKDIR_CONTAINER_PATH` | `/data/build-workdir` | The same directory as the backend sees it |
+| `BUILD_WORKDIR_CONTAINER_PATH` | `/data/build-workdir` | The same directory as the backend sees it. In compose it equals `RANGER_WORKDIR_HOST_PATH`: compose deploy requires the paths to match |
 | `BUILD_LOGS_DIR` | `data/build-logs` | Build log directory |
 
 Values hard-coded in `apps/backend/src` (change them by rebuilding):
@@ -482,7 +599,9 @@ Values hard-coded in `apps/backend/src` (change them by rebuilding):
 | Projects, builds, users, audit, queue, sessions | PostgreSQL, volume `postgres-data` |
 | Build logs (`<build id>.log`) | volume `build-logs` |
 | Build checkouts and each project's last checkout | `RANGER_WORKDIR_HOST_PATH` on the host |
-| Images of deployed apps | the host's Docker (`ranger-deploy-*`) |
+| Compose deploy directories (current and previous) | `RANGER_WORKDIR_HOST_PATH/deploys` |
+| Images of deployed apps | the host's Docker (`ranger-deploy-*`, `ranger-compose-*`) |
+| Compose service data | named volumes `ranger-compose-<id>_*` |
 
 For a backup, **the database and `DEPLOY_KEY_ENCRYPTION_KEY`** are enough. Without the
 encryption key, stored deploy keys and environment variables can't be decrypted even
@@ -516,7 +635,8 @@ HTTP status.
 | `GET /projects`, `GET /projects/:id` | any | List / one project (no secrets; `envKeys` is names only) |
 | `POST /projects` | operator | Create a project (optionally with `env`) |
 | `PATCH /projects/:id` | operator | Change settings |
-| `DELETE /projects/:id` | operator | Delete the project and its container |
+| `DELETE /projects/:id` | operator | Delete the project and its deploy |
+| `PUT /projects/:id/deploy-mode` | admin | `{ mode: "container" \| "compose", composeFile }` (audited) |
 | `POST /projects/check-repository` | operator | `{ gitUrl, deployPrivateKey }` → branch list |
 | `GET /projects/:id/branches`, `GET /projects/:id/commits` | any | Branches, recent commits |
 | `POST /projects/:id/deploy-key` | operator | Replace the deploy key |
@@ -531,7 +651,7 @@ HTTP status.
 | `POST /projects/:id/builds` | operator | `{ branch? }` — queue a build |
 | `GET /projects/:id/builds`, `GET /builds/:id` | any | History / a build with its steps |
 | `GET /projects/:id/deployments` | any | Deploy history |
-| `POST /projects/:id/deployments/:deploymentId/rollback` | operator | Roll back to an earlier successful deploy |
+| `POST /projects/:id/deployments/:deploymentId/rollback` | operator | Roll back to an earlier successful deploy (single-container mode only) |
 
 **Everything else**
 
@@ -563,7 +683,8 @@ The schema is `apps/backend/prisma/schema.prisma`; migrations are applied on sta
 ```
 users        email, role, disabled, must_change_password
 projects     git_url, branch, install/test/build_cmd, trigger_mode, cron_expr,
-             container_port, host_port, is_public, env_keys, encrypted_env
+             container_port, host_port, deploy_mode, compose_file, is_public,
+             env_keys, encrypted_env
 deploy_keys  encrypted private key (1:1 with a project)
 builds       project_id, status, branch, triggered_by, steps (jsonb)
 test_results result of the test step
@@ -597,6 +718,25 @@ within 30 seconds, or the wrong port is set. Check the container logs on the
 
 **Deploy: host port in use.** Something already listens on that port — pick another.
 
+**Compose deploy: "требует, чтобы рабочая директория была смонтирована… по тому же
+пути" (the working directory must be mounted at the same path).** The backend sees
+checkouts at a different path than the host does. In Ranger's `docker-compose.yml` the
+volume must be `${RANGER_WORKDIR_HOST_PATH}:${RANGER_WORKDIR_HOST_PATH}` and
+`BUILD_WORKDIR_CONTAINER_PATH` must equal `RANGER_WORKDIR_HOST_PATH` (the default setup).
+When running the backend without compose, set `BUILD_WORKDIR_CONTAINER_PATH` and
+`BUILD_WORKDIR_HOST_PATH` to the same value in `apps/backend/.env`.
+
+**Compose deploy: "в репозитории нет docker-compose.yml" (no compose file in the
+repository).** The file path in the deploy mode doesn't match the repository — fix it
+in the "Deploy mode" card.
+
+**Compose deploy fails at `--wait`.** A service exited or didn't become healthy within
+120 seconds. The build log has compose's output; the service's own logs are on the
+"Containers" page or via `docker compose -p ranger-compose-<id> logs`.
+
+**Compose services didn't come back after a server reboot.** The compose file lacks
+`restart: unless-stopped`.
+
 **Forgot the administrator password.**
 `docker compose exec backend node dist/cli/reset-password.js <email>`.
 
@@ -612,6 +752,8 @@ the previous value back; if it's lost, the keys and variables must be entered ag
 - **Limits for deployed containers.** Build steps are limited, but `ranger-deploy-*`
   containers currently run without CPU and memory limits.
 - **The health check is TCP only.** An HTTP path check isn't supported.
+- **Compose deploy has no rollback**, no container shell and no metrics on the project
+  tab. Rollback needs per-build service images — the next stage.
 - **Metrics cover one hour** and don't survive a restart.
 - **No notifications** (Telegram and others are not planned).
 

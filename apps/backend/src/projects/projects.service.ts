@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { DeployMode, Prisma, UserRole } from '@prisma/client';
 import cron from 'node-cron';
 import { PrismaService } from '../prisma/prisma.service';
 import { CronTriggerService } from '../builds/cron-trigger.service';
 import { DeployRunnerService } from '../deployments/deploy-runner.service';
+import { ComposeDeployService } from '../deployments/compose-deploy.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { decryptSecret, encryptSecret } from '../common/secret-crypto';
@@ -28,6 +29,8 @@ const projectSelect = {
   containerPort: true,
   hostPort: true,
   isPublic: true,
+  deployMode: true,
+  composeFile: true,
   envKeys: true,
   deployKey: { select: { id: true } },
 } satisfies Prisma.ProjectSelect;
@@ -76,6 +79,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly cronTrigger: CronTriggerService,
     private readonly deployRunner: DeployRunnerService,
+    private readonly composeDeploy: ComposeDeployService,
   ) {}
 
   // Все проекты, а не только свои: доступ к проектам разграничивается ролью, а не
@@ -121,8 +125,16 @@ export class ProjectsService {
     return project;
   }
 
-  async update(id: string, dto: UpdateProjectDto) {
+  async update(id: string, dto: UpdateProjectDto, actorRole: UserRole) {
     const existing = await this.findOne(id);
+    // Compose-файл берётся из репозитория и ветки проекта: подменить их — то же самое,
+    // что включить compose-деплой с чужим файлом, а это право только admin.
+    const changesSource =
+      (dto.gitUrl !== undefined && dto.gitUrl !== existing.gitUrl) ||
+      (dto.branch !== undefined && dto.branch !== existing.branch);
+    if (existing.deployMode === 'compose' && changesSource && actorRole !== 'admin') {
+      throw new ForbiddenException('Репозиторий и ветку compose-проекта меняет только администратор');
+    }
     assertHasAnyCommand(
       dto.installCmd ?? existing.installCmd,
       dto.testCmd ?? existing.testCmd,
@@ -139,10 +151,30 @@ export class ProjectsService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const project = await this.findOne(id);
     await this.prisma.project.delete({ where: { id } });
     this.cronTrigger.unschedule(id);
-    await this.deployRunner.teardown(id);
+    await this.teardownDeploy(id, project.deployMode);
+  }
+
+  // Смена режима останавливает то, что было задеплоено в старом: иначе одиночный
+  // контейнер продолжил бы держать порт рядом с compose-сервисами, и наоборот.
+  // Новый режим начнёт работать со следующей сборки основной ветки.
+  async setDeployMode(id: string, mode: DeployMode, composeFile: string) {
+    const existing = await this.findOne(id);
+    const project = await this.prisma.project.update({
+      where: { id },
+      data: { deployMode: mode, composeFile },
+      select: projectSelect,
+    });
+    if (existing.deployMode !== mode) {
+      await this.teardownDeploy(id, existing.deployMode);
+    }
+    return project;
+  }
+
+  private teardownDeploy(id: string, mode: DeployMode) {
+    return mode === 'compose' ? this.composeDeploy.teardown(id) : this.deployRunner.teardown(id);
   }
 
   // Ключ можно только заменить целиком, не отредактировать частично — обычный

@@ -143,6 +143,11 @@ export class DeployRunnerService {
     if (target.status !== 'running') {
       throw new BadRequestException('Откатиться можно только на сборку, которая когда-то успешно задеплоилась');
     }
+    // Запись могла остаться от времени, когда проект деплоился через compose: образа
+    // с таким тегом нет, есть только имя compose-проекта.
+    if (!target.imageTag.startsWith(IMAGE_TAG_PREFIX)) {
+      throw new BadRequestException('Это был compose-деплой — на него откатиться нельзя');
+    }
 
     const containerName = deployContainerName(projectId);
     const sharedNetworks = await this.resolveSharedNetworks();
@@ -296,8 +301,10 @@ export class DeployRunnerService {
     onLog: (line: string) => void,
   ): Promise<string | null> {
     await this.removeContainerIfExists(containerName);
+    // Только деплои одним контейнером: compose-записи (если проект раньше деплоился
+    // через compose) не указывают на образ, который можно запустить.
     const previous = await this.prisma.deployment.findFirst({
-      where: { projectId, status: 'running' },
+      where: { projectId, status: 'running', imageTag: { startsWith: IMAGE_TAG_PREFIX } },
       orderBy: { deployedAt: 'desc' },
     });
     if (!previous) {

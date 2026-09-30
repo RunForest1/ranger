@@ -8,7 +8,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import EnvVariablesEditor, { envRowsToVariables, storedEnvRows } from '../components/EnvVariablesEditor';
-import type { Project } from '../types';
+import type { DeployMode, Project } from '../types';
 
 const inputClass =
   'mt-1 w-full rounded-md border border-border bg-surface-alt px-3 py-2 text-primary outline-none focus:border-accent';
@@ -228,6 +228,79 @@ function EnvCard({ project }: { project: Project }) {
   );
 }
 
+// Только для admin: compose-файл из репозитория может запросить privileged, Docker-сокет
+// или корень хоста, так что включить такой режим — значит доверить репозиторию сервер.
+function DeployModeCard({ project, onChange }: { project: Project; onChange: (project: Project) => void }) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState<DeployMode>(project.deployMode);
+  const [composeFile, setComposeFile] = useState(project.composeFile);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const changed = mode !== project.deployMode || composeFile !== project.composeFile;
+
+  async function handleSave() {
+    setError(null);
+    setNotice(null);
+    setSubmitting(true);
+    try {
+      onChange(await api.setDeployMode(project.id, mode, composeFile));
+      setNotice(t('projects.deployMode.saved'));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-3 p-5">
+      <h2 className="text-sm font-semibold text-primary">{t('projects.deployMode.title')}</h2>
+      <div className="space-y-2">
+        <label className="flex items-start gap-2 text-sm text-primary">
+          <input type="radio" checked={mode === 'container'} onChange={() => setMode('container')} className="mt-1" />
+          <span>
+            {t('projects.deployMode.container')}
+            <span className={`block ${hintClass}`}>{t('projects.deployMode.containerHint')}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm text-primary">
+          <input type="radio" checked={mode === 'compose'} onChange={() => setMode('compose')} className="mt-1" />
+          <span>
+            {t('projects.deployMode.compose')}
+            <span className={`block ${hintClass}`}>{t('projects.deployMode.composeHint')}</span>
+          </span>
+        </label>
+      </div>
+
+      {mode === 'compose' && (
+        <>
+          <label className={labelClass}>
+            {t('projects.deployMode.composeFile')}
+            <input
+              required
+              value={composeFile}
+              onChange={(e) => setComposeFile(e.target.value)}
+              className={`${inputClass} font-mono`}
+            />
+          </label>
+          <p className="text-sm text-warning">{t('projects.deployMode.composeWarning')}</p>
+        </>
+      )}
+
+      {changed && mode !== project.deployMode && (
+        <p className={hintClass}>{t('projects.deployMode.switchHint')}</p>
+      )}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {notice && <p className="text-sm text-success">{notice}</p>}
+      <Button type="button" disabled={!changed || submitting} onClick={handleSave}>
+        {t('projects.deployMode.save')}
+      </Button>
+    </Card>
+  );
+}
+
 function DeleteProjectCard({ project }: { project: Project }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -288,7 +361,8 @@ export default function EditProject() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const refreshProjects = useProjectsStore((s) => s.refresh);
-  const canEdit = hasRole(useRole(), 'operator');
+  const role = useRole();
+  const canEdit = hasRole(role, 'operator');
 
   const [project, setProject] = useState<Project | null>(null);
   const [name, setName] = useState('');
@@ -333,7 +407,7 @@ export default function EditProject() {
       setError(t('projects.new.needCommand'));
       return;
     }
-    if (deployOpen && (!containerPort.trim() || !hostPort.trim())) {
+    if (project?.deployMode !== 'compose' && deployOpen && (!containerPort.trim() || !hostPort.trim())) {
       setError(t('projects.new.deployPortsRequired'));
       return;
     }
@@ -369,6 +443,11 @@ export default function EditProject() {
     return null;
   }
 
+  const isCompose = project.deployMode === 'compose';
+  // Совпадает с проверкой в projects.service.ts: источник compose-файла меняет только admin.
+  const sourceLocked = isCompose && role !== 'admin';
+  const lockedClass = sourceLocked ? 'text-muted' : '';
+
   return (
     <div className="max-w-2xl space-y-5">
       <h1 className="text-lg font-semibold text-primary">{t('projects.edit.title')}</h1>
@@ -383,15 +462,23 @@ export default function EditProject() {
             {t('projects.new.gitUrl')}
             <input
               required
+              readOnly={sourceLocked}
               value={gitUrl}
               onChange={(e) => setGitUrl(e.target.value)}
-              className={`${inputClass} font-mono`}
+              className={`${inputClass} font-mono ${lockedClass}`}
             />
           </label>
           <label className={labelClass}>
             {t('projects.new.branch')}
-            <input required value={branch} onChange={(e) => setBranch(e.target.value)} className={`${inputClass} font-mono`} />
+            <input
+              required
+              readOnly={sourceLocked}
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              className={`${inputClass} font-mono ${lockedClass}`}
+            />
           </label>
+          {sourceLocked && <p className={hintClass}>{t('projects.deployMode.sourceLocked')}</p>}
         </Card>
 
         <Card className="space-y-4 p-5">
@@ -442,45 +529,56 @@ export default function EditProject() {
           )}
         </Card>
 
-        <Card className="p-5">
-          <button
-            type="button"
-            onClick={() => setDeployOpen((open) => !open)}
-            className="flex w-full items-center justify-between text-left text-sm font-semibold text-primary"
-          >
-            {t('projects.new.deployTitle')}
-            <span className="text-xs font-normal text-muted">{deployOpen ? '−' : '+'}</span>
-          </button>
-          {deployOpen && (
-            <div className="mt-4 space-y-4">
-              <p className={hintClass}>{t('projects.new.deployHint')}</p>
-              <div className="grid grid-cols-2 gap-4">
-                <label className={labelClass}>
-                  {t('projects.new.containerPort')}
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={containerPort}
-                    onChange={(e) => setContainerPort(e.target.value)}
-                    className={`${inputClass} font-mono`}
-                  />
-                </label>
-                <label className={labelClass}>
-                  {t('projects.new.hostPort')}
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={hostPort}
-                    onChange={(e) => setHostPort(e.target.value)}
-                    className={`${inputClass} font-mono`}
-                  />
-                </label>
+        {isCompose ? (
+          <Card className="space-y-2 p-5">
+            <h2 className="text-sm font-semibold text-primary">{t('projects.new.deployTitle')}</h2>
+            <p className="text-sm text-primary">
+              {t('projects.deployMode.composeActive')}{' '}
+              <span className="font-mono">{project.composeFile}</span>
+            </p>
+            <p className={hintClass}>{t('projects.deployMode.changedByAdmin')}</p>
+          </Card>
+        ) : (
+          <Card className="p-5">
+            <button
+              type="button"
+              onClick={() => setDeployOpen((open) => !open)}
+              className="flex w-full items-center justify-between text-left text-sm font-semibold text-primary"
+            >
+              {t('projects.new.deployTitle')}
+              <span className="text-xs font-normal text-muted">{deployOpen ? '−' : '+'}</span>
+            </button>
+            {deployOpen && (
+              <div className="mt-4 space-y-4">
+                <p className={hintClass}>{t('projects.new.deployHint')}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className={labelClass}>
+                    {t('projects.new.containerPort')}
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={containerPort}
+                      onChange={(e) => setContainerPort(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    {t('projects.new.hostPort')}
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={hostPort}
+                      onChange={(e) => setHostPort(e.target.value)}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </label>
+                </div>
               </div>
-            </div>
-          )}
-        </Card>
+            )}
+          </Card>
+        )}
 
         <Card className="space-y-2 p-5">
           <label className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -507,6 +605,7 @@ export default function EditProject() {
         </div>
       </form>
 
+      {role === 'admin' && <DeployModeCard project={project} onChange={setProject} />}
       <EnvCard project={project} />
       <DeployKeyCard project={project} />
       <DeleteProjectCard project={project} />

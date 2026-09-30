@@ -7,6 +7,7 @@ import type {
   CommitInfo,
   Container,
   ContainerMetricSample,
+  DeployMode,
   Deployment,
   EnvVariableInput,
   FileContent,
@@ -93,6 +94,8 @@ export const api = {
     }),
   revealDeployKey: (id: string) =>
     request<{ privateKey: string }>(`/projects/${id}/deploy-key/reveal`, { method: 'POST' }),
+  setDeployMode: (id: string, mode: DeployMode, composeFile: string) =>
+    request<Project>(`/projects/${id}/deploy-mode`, { method: 'PUT', body: JSON.stringify({ mode, composeFile }) }),
   setProjectEnv: (id: string, variables: EnvVariableInput[]) =>
     request<Project>(`/projects/${id}/env`, { method: 'PUT', body: JSON.stringify({ variables }) }),
   revealProjectEnv: (id: string) =>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
+import { hasDeploy } from '../../lib/project';
 import { hasRole, useRole } from '../../stores/auth.store';
 import type { CommitInfo, Deployment, Project } from '../../types';
 import Card from '../../components/ui/Card';
@@ -24,9 +25,10 @@ function DeploymentCard({ project }: { project: Project }) {
     api.listDeployments(project.id).then(setDeployments);
   }, [project.id]);
 
-  if (project.containerPort == null || project.hostPort == null) {
+  if (!hasDeploy(project)) {
     return null;
   }
+  const isCompose = project.deployMode === 'compose';
 
   const latest = deployments?.[0];
   // Работающая сейчас версия — самый свежий успешный деплой, а не просто первая
@@ -52,10 +54,19 @@ function DeploymentCard({ project }: { project: Project }) {
     <Card className="p-5">
       <h2 className="mb-3 text-sm font-semibold text-primary">{t('projects.overview.deployment')}</h2>
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-        <dt className="text-muted">{t('projects.overview.port')}</dt>
-        <dd className="font-mono text-primary">
-          {project.hostPort} → {project.containerPort}
-        </dd>
+        {isCompose ? (
+          <>
+            <dt className="text-muted">{t('projects.overview.composeFile')}</dt>
+            <dd className="font-mono text-primary">{project.composeFile}</dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-muted">{t('projects.overview.port')}</dt>
+            <dd className="font-mono text-primary">
+              {project.hostPort} → {project.containerPort}
+            </dd>
+          </>
+        )}
 
         <dt className="text-muted">{t('projects.overview.deploymentStatus')}</dt>
         <dd>
@@ -89,7 +100,8 @@ function DeploymentCard({ project }: { project: Project }) {
           <ul className="space-y-2">
             {deployments.slice(0, HISTORY_LIMIT).map((deployment) => {
               const isCurrent = deployment.id === currentId;
-              const canRollback = canRollbackAny && deployment.status === 'running' && !isCurrent;
+              // Отката для compose-деплоя нет (compose-deploy.service.ts).
+              const canRollback = canRollbackAny && !isCompose && deployment.status === 'running' && !isCurrent;
               return (
                 <li key={deployment.id} className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex min-w-0 items-center gap-2">

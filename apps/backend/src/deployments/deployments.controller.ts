@@ -31,6 +31,9 @@ export class DeploymentsController {
     if (!project) {
       throw new NotFoundException('Проект не найден');
     }
+    if (project.deployMode === 'compose') {
+      throw new BadRequestException('Откат для compose-деплоя пока не поддерживается');
+    }
     if (project.hostPort == null || project.containerPort == null) {
       throw new BadRequestException('У проекта не настроен деплой — нечего откатывать');
     }

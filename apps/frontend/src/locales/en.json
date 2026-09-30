@@ -60,7 +60,8 @@
     "noData": "No data yet",
     "noContainer": "Project isn't deployed — container metrics unavailable",
     "now": "now",
-    "availableOf": "{{free}} available of {{total}}"
+    "availableOf": "{{free}} available of {{total}}",
+    "composeHint": "This project deploys with docker compose — metrics for its services are on the Containers page"
   },
   "common": {
     "theme": {
@@ -116,7 +117,8 @@
       "create_user": "Created a user",
       "update_user": "Changed a user",
       "reset_password": "Reset a user's password",
-      "reveal_project_env": "Viewed environment variables"
+      "reveal_project_env": "Viewed environment variables",
+      "change_deploy_mode": "Changed the deploy mode"
     }
   },
   "docs": {
@@ -167,7 +169,7 @@
       ]
     },
     "build": {
-      "body": "One queue per project: builds of the same project never run in parallel, different projects run at the same time. Ranger clones the repo over SSH and runs install → test → build inside an unprivileged container with CPU/memory/process limits and a hard per-step timeout.\n\nIf a step fails, later ones are marked \"skipped\" and the build fails overall. The log streams to the UI over WebSocket and is saved to disk.\n\nIf both ports are filled in on the project (\"Deploy\" in the project form), a fourth step is added after a successful build: Ranger builds an image from the Dockerfile at the repo root, stops the project's previous container, starts the new one, waits for the port to open, and rolls back to the previous image if anything goes wrong. Without a Dockerfile in the repo, the deploy step fails with a clear reason in the log, without touching the container that's already running."
+      "body": "One queue per project: builds of the same project never run in parallel, different projects run at the same time. Ranger clones the repo over SSH and runs install → test → build inside an unprivileged container with CPU/memory/process limits and a hard per-step timeout.\n\nIf a step fails, later ones are marked \"skipped\" and the build fails overall. The log streams to the UI over WebSocket and is saved to disk.\n\nIf both ports are filled in on the project (\"Deploy\" in the project form), a fourth step is added after a successful build: Ranger builds an image from the Dockerfile at the repo root, stops the project's previous container, starts the new one, waits for the port to open, and rolls back to the previous image if anything goes wrong. Without a Dockerfile in the repo, the deploy step fails with a clear reason in the log, without touching the container that's already running.\n\nThe second deploy mode is Docker Compose: an administrator enables it in project settings, and after the build Ranger runs docker compose up with a file from the repository and waits for every service to start. This mode has no rollback — on failure the services stay as they are, and the reason is in the build log."
     },
     "users": {
       "intro": "There's no registration: the first administrator is created at startup and adds everyone else.",
@@ -302,7 +304,8 @@
       "deploymentHistoryEmpty": "No deployments yet",
       "rollback": "Roll back",
       "rollingBack": "Rolling back…",
-      "rollbackCurrent": "Current"
+      "rollbackCurrent": "Current",
+      "composeFile": "Compose file"
     },
     "edit": {
       "title": "Edit project",
@@ -343,6 +346,21 @@
       "reveal": "Show values",
       "revealHint": "Visible to admins only. Every reveal is recorded in the audit log.",
       "hide": "Hide"
+    },
+    "deployMode": {
+      "title": "Deploy mode",
+      "container": "Single container",
+      "containerHint": "An image from the Dockerfile at the repository root; ports are set in project settings. Automatic and manual rollback.",
+      "compose": "Docker Compose",
+      "composeHint": "After the build, docker compose up runs with a file from the repository: multiple services, their own volumes and networks. No rollback.",
+      "composeFile": "Path to the compose file in the repository",
+      "composeWarning": "A compose file can request privileged mode, the Docker socket, or mount any host path. Enable this only for repositories you trust as much as the server. Only an administrator will be able to change this project’s repository and branch.",
+      "switchHint": "Switching modes stops whatever was deployed in the old mode. The new mode takes effect from the next build of the main branch.",
+      "save": "Save mode",
+      "saved": "Deploy mode saved",
+      "composeActive": "Deployed with docker compose from",
+      "changedByAdmin": "An administrator changes the deploy mode.",
+      "sourceLocked": "This project deploys with docker compose — only an administrator can change its repository and branch."
     }
   }
 }

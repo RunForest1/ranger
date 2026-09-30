@@ -20,6 +20,15 @@ enum TriggerMode {
   manual
 }
 
+// container — один контейнер из Dockerfile в корне репозитория, порты задаёт Ranger;
+// compose — `docker compose up` по файлу из репозитория. Compose-файл может запросить
+// что угодно (privileged, Docker-сокет, корень хоста), поэтому режим включает только
+// admin (projects.controller.ts, PUT /projects/:id/deploy-mode).
+enum DeployMode {
+  container
+  compose
+}
+
 enum BuildStatus {
   queued
   running
@@ -66,6 +75,10 @@ model Project {
   // (итерация 2: "остановка старого контейнера → запуск нового → health-check").
   containerPort Int?      @map("container_port")
   hostPort      Int?      @map("host_port")
+
+  deployMode    DeployMode @default(container) @map("deploy_mode")
+  // Путь к compose-файлу относительно корня репозитория, только для deployMode=compose.
+  composeFile   String     @default("docker-compose.yml") @map("compose_file")
 
   // Показывать ли проект на публичной странице статуса (итерация 5) — по умолчанию
   // нет: анонимно видно только то, что явно разрешили.

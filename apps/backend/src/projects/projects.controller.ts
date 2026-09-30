@@ -23,6 +23,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { CheckRepositoryDto } from './dto/check-repository.dto';
 import { ReplaceDeployKeyDto } from './dto/replace-deploy-key.dto';
 import { SetProjectEnvDto } from './dto/set-project-env.dto';
+import { SetDeployModeDto } from './dto/set-deploy-mode.dto';
 import { listRemoteBranches } from './list-branches';
 
 // Чтение — любой роли (viewer включительно), изменения — operator и выше,
@@ -89,8 +90,19 @@ export class ProjectsController {
 
   @Patch(':id')
   @RequireRole('operator')
-  update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
-    return this.projectsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateProjectDto, @Req() req: Request) {
+    return this.projectsService.update(id, dto, req.userRole!);
+  }
+
+  // Compose-файл из репозитория может запросить privileged, Docker-сокет или корень
+  // хоста — включить такой деплой значит выдать репозиторию root на сервере. Поэтому
+  // только admin и запись в аудит, а не обычное поле формы проекта.
+  @Put(':id/deploy-mode')
+  @RequireRole('admin')
+  async setDeployMode(@Param('id') id: string, @Body() dto: SetDeployModeDto, @Req() req: Request) {
+    const project = await this.projectsService.setDeployMode(id, dto.mode, dto.composeFile);
+    await this.audit.record(req.session.userId!, 'change_deploy_mode', `${id}:${dto.mode}:${dto.composeFile}`);
+    return project;
   }
 
   @Delete(':id')

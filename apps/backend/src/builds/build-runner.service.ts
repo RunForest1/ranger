@@ -9,6 +9,7 @@ import { decryptSecret } from '../common/secret-crypto';
 import { ProjectEnv, decryptProjectEnv } from '../projects/project-env';
 import { cloneRepository } from './clone-repository';
 import { DeployRunnerService } from '../deployments/deploy-runner.service';
+import { ComposeDeployService } from '../deployments/compose-deploy.service';
 import { BuildStep, BuildStepName } from './builds.types';
 import { WORKDIR_CONTAINER_ROOT, projectCheckoutDir, toHostPath } from './workdir-paths';
 
@@ -40,6 +41,7 @@ export class BuildRunnerService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly gateway: BuildsGateway,
     private readonly deployRunner: DeployRunnerService,
+    private readonly composeDeploy: ComposeDeployService,
   ) {}
 
   async onModuleInit() {
@@ -74,13 +76,14 @@ export class BuildRunnerService implements OnModuleInit {
 
     await this.updateStatus(buildId, 'running', { startedAt: new Date() });
 
-    // Шаг деплоя добавляется, только если у проекта заданы оба порта (см. валидацию
-    // в projects.service.ts) — без них Ranger не знает, на каком порту публиковать
-    // контейнер, и молча пропускать четвёртый шаг понятнее, чем требовать его от всех.
-    // И только для основной ветки: у проекта один деплой-контейнер на одном порту,
-    // и сборка произвольной ветки не должна подменять работающую версию (итерация 5).
+    // Шаг деплоя добавляется для compose-проекта или если у проекта заданы оба порта
+    // (см. валидацию в projects.service.ts) — без них Ranger не знает, на каком порту
+    // публиковать контейнер, и молча пропускать четвёртый шаг понятнее, чем требовать
+    // его от всех. И только для основной ветки: у проекта один деплой, и сборка
+    // произвольной ветки не должна подменять работающую версию (итерация 5).
+    const isCompose = project.deployMode === 'compose';
     const hasDeploy =
-      project.hostPort != null && project.containerPort != null && build.branch === project.branch;
+      (isCompose || (project.hostPort != null && project.containerPort != null)) && build.branch === project.branch;
     const stepNames: BuildStepName[] = hasDeploy ? [...SHELL_STEP_NAMES, 'deploy'] : [...SHELL_STEP_NAMES];
     const steps: BuildStep[] = stepNames.map((name) => ({
       name,
@@ -108,6 +111,11 @@ export class BuildRunnerService implements OnModuleInit {
       const repoDirOnHost = toHostPath(repoDir);
       const env = decryptProjectEnv(project.encryptedEnv);
       const maskSecrets = createSecretMasker(env);
+      const writeLine = (line: string) => {
+        const masked = maskSecrets(line);
+        logFile.write(`${masked}\n`);
+        this.gateway.emitLog(buildId, masked);
+      };
 
       const commands: Record<(typeof SHELL_STEP_NAMES)[number], string | null> = {
         install: project.installCmd,
@@ -129,18 +137,26 @@ export class BuildRunnerService implements OnModuleInit {
           this.gateway.emitSteps(buildId, steps);
 
           const deployStartedAt = Date.now();
-          const deployed = await this.deployRunner.deploy({
-            projectId: project.id,
-            buildId,
-            repoDir,
-            hostPort: project.hostPort!,
-            containerPort: project.containerPort!,
-            env,
-            onLog: (line) => {
-              logFile.write(`${line}\n`);
-              this.gateway.emitLog(buildId, line);
-            },
-          });
+          // Маскируется и вывод деплоя: compose подставляет переменные в compose-файл,
+          // и сборка образов может их напечатать.
+          const deployed = isCompose
+            ? await this.composeDeploy.deploy({
+                projectId: project.id,
+                buildId,
+                repoDir,
+                composeFile: project.composeFile,
+                env,
+                onLog: writeLine,
+              })
+            : await this.deployRunner.deploy({
+                projectId: project.id,
+                buildId,
+                repoDir,
+                hostPort: project.hostPort!,
+                containerPort: project.containerPort!,
+                env,
+                onLog: writeLine,
+              });
           step.durationMs = Date.now() - deployStartedAt;
           step.status = deployed ? 'success' : 'failed';
           allPassed = deployed;
@@ -160,11 +176,6 @@ export class BuildRunnerService implements OnModuleInit {
         this.gateway.emitSteps(buildId, steps);
 
         let lineBuffer = '';
-        const writeLine = (line: string) => {
-          const masked = maskSecrets(line);
-          logFile.write(`${masked}\n`);
-          this.gateway.emitLog(buildId, masked);
-        };
         const result = await execute({
           image: BUILDER_IMAGE,
           command,

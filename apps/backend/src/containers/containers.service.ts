@@ -1,13 +1,27 @@
 import { Injectable } from '@nestjs/common';
+import { ContainerInfo } from 'dockerode';
 import { DockerService } from '../docker/docker.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseProjectIdFromContainerName } from '../deployments/container-naming';
+import {
+  COMPOSE_PROJECT_LABEL,
+  parseProjectIdFromComposeProject,
+  parseProjectIdFromContainerName,
+} from '../deployments/container-naming';
+
+// Контейнер Ranger-проекта: одиночный деплой (по имени) или сервис compose-деплоя (по метке).
+function projectIdOf(container: ContainerInfo): string | null {
+  return (
+    parseProjectIdFromContainerName(container.Names[0] ?? '') ??
+    parseProjectIdFromComposeProject(container.Labels?.[COMPOSE_PROJECT_LABEL])
+  );
+}
 
 // Раздел 5 CLAUDE.md, итерация 2/3: "все на хосте", не только контейнеры,
 // запущенные самим Ranger — поэтому список Docker-демона как есть, без фильтрации.
 //
-// Группировка: контейнеры, задеплоенные самим Ranger (имя ranger-deploy-<projectId>),
-// получают точную группу — реальное имя проекта из БД. Для всех остальных контейнеров
+// Группировка: контейнеры, задеплоенные самим Ranger (имя ranger-deploy-<projectId>
+// или метка compose-проекта ranger-compose-<projectId>), получают точную группу —
+// реальное имя проекта из БД. Для всех остальных контейнеров
 // хоста (в том числе не имеющих отношения к Ranger вообще — соседние docker-compose
 // стеки) группа — эвристика по первому слову имени до дефиса: обычный docker compose
 // сам называет контейнеры "<project>-<service>-<n>", так что это довольно надёжно
@@ -24,7 +38,7 @@ export class ContainersService {
     const containers = await this.docker.listContainers({ all: true });
 
     const projectIds = containers
-      .map((c) => parseProjectIdFromContainerName(c.Names[0] ?? ''))
+      .map(projectIdOf)
       .filter((id): id is string => id != null);
     const projects = projectIds.length
       ? await this.prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, name: true } })
@@ -34,7 +48,7 @@ export class ContainersService {
     return containers
       .map((container) => {
         const name = container.Names[0]?.replace(/^\//, '') ?? container.Id.slice(0, 12);
-        const projectId = parseProjectIdFromContainerName(container.Names[0] ?? '');
+        const projectId = projectIdOf(container);
         const project = projectId ? { id: projectId, name: projectNameById.get(projectId) ?? projectId } : null;
 
         return {

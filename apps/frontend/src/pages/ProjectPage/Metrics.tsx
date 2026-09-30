@@ -61,7 +61,9 @@ export default function ProjectMetrics() {
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-primary">{t('metrics.container')}</h2>
-        {!containerId ? (
+        {project.deployMode === 'compose' ? (
+          <p className="text-sm text-muted">{t('metrics.composeHint')}</p>
+        ) : !containerId ? (
           <p className="text-sm text-muted">{t('metrics.noContainer')}</p>
         ) : (
           <div className="grid grid-cols-2 gap-6">

@@ -163,7 +163,10 @@ export default function ProjectConsole() {
     return <p className="text-sm text-muted">{t('console.errors.forbidden')}</p>;
   }
 
-  const hasDeploy = project != null && project.containerPort != null && project.hostPort != null;
+  // Шелл в контейнере — только у деплоя одним контейнером: у compose-проекта сервисов
+  // несколько, и выбирать среди них терминал пока не умеет.
+  const hasDeploy =
+    project != null && project.deployMode === 'container' && project.containerPort != null && project.hostPort != null;
 
   return (
     <div className="space-y-4">

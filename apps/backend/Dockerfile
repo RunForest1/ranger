@@ -30,6 +30,14 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/*
 
+# Docker CLI с плагином compose — только для compose-деплоя (compose-deploy.service.ts):
+# compose — отдельная программа, в dockerode её нет. Оба бинарника статические, поэтому
+# берутся из официального образа, а не из apt-репозитория Docker. Демон не нужен —
+# CLI ходит в сокет хоста, тот же, что и dockerode.
+COPY --from=docker:29-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:29-cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+RUN docker compose version
+
 # У bun workspaces прямые зависимости каждого пакета (включая CLI-бинари вроде prisma)
 # лежат симлинками в node_modules САМОГО пакета, а не только в корневом (общий стор
 # .bun/ — в корне, но резолвится через локальные симлинки каждого воркспейса). Точечно

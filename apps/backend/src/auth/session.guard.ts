@@ -41,6 +41,7 @@ export class SessionGuard implements CanActivate {
     if (requiredRole && ROLE_RANK[user.role] < ROLE_RANK[requiredRole]) {
       throw new ForbiddenException('Недостаточно прав');
     }
+    request.userRole = user.role;
     return true;
   }
 }

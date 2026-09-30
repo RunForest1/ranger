@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
+import { hasDeploy } from '../../lib/project';
 import { socket } from '../../lib/socket';
 import { useProjectsStore } from '../../stores/projects.store';
 import { hasRole, useRole } from '../../stores/auth.store';
@@ -49,8 +50,7 @@ export default function ProjectBuilds() {
   }, [projectId, defaultBranch]);
 
   const branchOptions = branches.includes(defaultBranch) || !defaultBranch ? branches : [defaultBranch, ...branches];
-  const deploySkipped =
-    project != null && project.containerPort != null && project.hostPort != null && branch !== defaultBranch;
+  const deploySkipped = project != null && hasDeploy(project) && branch !== defaultBranch;
 
   const loadBuilds = useCallback(async () => {
     if (!projectId) return;
