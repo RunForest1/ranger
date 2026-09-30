@@ -1,0 +1,348 @@
+{
+  "app": {
+    "title": "Ranger",
+    "tagline": "CI/CD hub"
+  },
+  "nav": {
+    "overview": "Overview",
+    "builds": "Builds",
+    "files": "Files",
+    "logs": "Logs",
+    "metrics": "Metrics",
+    "console": "Console"
+  },
+  "welcome": {
+    "title": "Welcome to Ranger",
+    "body": "Pick a project on the left or add a new one.",
+    "emptyBody": "No projects yet. Add your first one — you'll need an SSH repo URL and a deploy key."
+  },
+  "sidebar": {
+    "projects": "Projects",
+    "noProjects": "No projects yet",
+    "addProject": "Add project"
+  },
+  "builds": {
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "success": "Success",
+      "failed": "Failed",
+      "rolled_back": "Rolled back"
+    },
+    "trigger": "Build",
+    "branch": "Branch",
+    "defaultBranch": "default",
+    "deploySkipped": "Not the project's main branch — install/test/build will run, the deploy step will be skipped.",
+    "empty": "No builds yet",
+    "logEmpty": "The log will appear once the build starts"
+  },
+  "containers": {
+    "title": "Containers",
+    "empty": "No containers on this host",
+    "logEmpty": "The log will appear once the container writes something",
+    "running": "Running",
+    "inactive": "Inactive"
+  },
+  "files": {
+    "title": "Files",
+    "loading": "Loading…",
+    "empty": "Empty",
+    "binary": "Binary file — not showing its content",
+    "tooLarge": "File is too large to preview (over 1 MB)"
+  },
+  "metrics": {
+    "host": "Host",
+    "container": "Project container",
+    "cpu": "CPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "loading": "Loading…",
+    "noData": "No data yet",
+    "noContainer": "Project isn't deployed — container metrics unavailable",
+    "now": "now",
+    "availableOf": "{{free}} available of {{total}}"
+  },
+  "common": {
+    "theme": {
+      "light": "Light theme",
+      "dark": "Dark theme"
+    },
+    "language": "Language"
+  },
+  "console": {
+    "startContainer": "Open shell in container",
+    "startWorkdir": "Open shell in workdir",
+    "stop": "Stop session",
+    "hint": "Runs as root inside an isolated, resource-limited container — no privileged mode, no access to the host. Opening a session is recorded in the audit log.",
+    "reauthTitle": "Confirm your password",
+    "reauthHint": "The terminal requires re-entering your password, separately from your session.",
+    "reauthConfirm": "Continue",
+    "closed": "Session closed",
+    "errors": {
+      "forbidden": "Available to admins only",
+      "unauthorized": "Session expired — log in again",
+      "project_not_found": "Project not found",
+      "not_deployed": "The project isn't deployed — only the workdir shell is available",
+      "container_not_running": "The project's container isn't running right now",
+      "no_checkout": "The project has no builds yet — there's no checkout to open",
+      "start_failed": "Could not start the session"
+    },
+    "closedReasons": {
+      "timeout": "time limit reached (30 min)",
+      "stream_closed": "the shell exited",
+      "stopped": "stopped by you"
+    }
+  },
+  "status": {
+    "title": "Build status",
+    "subtitle": "The latest build of each public project. Updates every 30 seconds.",
+    "loading": "Loading…",
+    "error": "Could not load build status",
+    "empty": "No public projects",
+    "noBuilds": "No builds yet"
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "subtitle": "Who triggered a build, requested a deploy key, or rolled back a deployment — visible here, not only in the database.",
+    "forbidden": "Available to admins only",
+    "loading": "Loading…",
+    "error": "Could not load the audit log",
+    "empty": "No entries yet",
+    "actions": {
+      "trigger_build": "Triggered a build",
+      "reveal_deploy_key": "Revealed a deploy key",
+      "rollback_deployment": "Rolled back a deployment",
+      "open_terminal": "Opened a terminal session",
+      "create_user": "Created a user",
+      "update_user": "Changed a user",
+      "reset_password": "Reset a user's password",
+      "reveal_project_env": "Viewed environment variables"
+    }
+  },
+  "docs": {
+    "title": "Documentation",
+    "intro": "Short and to the point — a cheat sheet, not a full manual.",
+    "tabs": {
+      "overview": "Overview",
+      "quickstart": "Quickstart",
+      "build": "Builds",
+      "users": "Users",
+      "security": "Security",
+      "roadmap": "Roadmap"
+    },
+    "overview": {
+      "body": "Ranger is a lightweight self-hosted CI/CD hub for one personal server and a handful of trusted users: builds, a live log and step status in one place, no switching between tools.\n\nThe whole flow: add a project by SSH URL → set three commands (install/test/build) → trigger a build manually or on a schedule → watch the log live."
+    },
+    "quickstart": {
+      "intro": "A full end-to-end test run — takes about 5 minutes and any git host (GitHub, GitLab, self-hosted).",
+      "steps": [
+        {
+          "title": "Create a test repository",
+          "body": "Set up an empty repo, e.g. ranger-hello-world, on GitHub or GitLab."
+        },
+        {
+          "title": "Add one file and push it",
+          "body": "Locally: echo \"console.log('Hello from Ranger')\" > build.js, then git add, commit and push to that repo."
+        },
+        {
+          "title": "Generate a dedicated SSH key",
+          "body": "ssh-keygen -t ed25519 -f deploy_key -N \"\" — a key just for Ranger, not your personal one."
+        },
+        {
+          "title": "Add the key to the repository",
+          "body": "In the repo's settings, add deploy_key.pub as a read-only Deploy key."
+        },
+        {
+          "title": "Create the project in Ranger",
+          "body": "\"+ Add project\" → paste the SSH URL and the deploy_key private key content → \"Check repository\" to pull the branch list."
+        },
+        {
+          "title": "Fill in the Build command",
+          "body": "Set Build to node build.js, leave Install and Test empty — they'll be marked \"skipped\", not failed."
+        },
+        {
+          "title": "Trigger a build",
+          "body": "\"Create\" → \"Builds\" tab → \"Build\". The live log should show \"Hello from Ranger\" with every step marked successful."
+        }
+      ]
+    },
+    "build": {
+      "body": "One queue per project: builds of the same project never run in parallel, different projects run at the same time. Ranger clones the repo over SSH and runs install → test → build inside an unprivileged container with CPU/memory/process limits and a hard per-step timeout.\n\nIf a step fails, later ones are marked \"skipped\" and the build fails overall. The log streams to the UI over WebSocket and is saved to disk.\n\nIf both ports are filled in on the project (\"Deploy\" in the project form), a fourth step is added after a successful build: Ranger builds an image from the Dockerfile at the repo root, stops the project's previous container, starts the new one, waits for the port to open, and rolls back to the previous image if anything goes wrong. Without a Dockerfile in the repo, the deploy step fails with a clear reason in the log, without touching the container that's already running."
+    },
+    "users": {
+      "intro": "There's no registration: the first administrator is created at startup and adds everyone else.",
+      "steps": [
+        {
+          "title": "Set the administrator's email",
+          "body": "Put ADMIN_EMAIL in .env before the first start. It's only used on an empty database."
+        },
+        {
+          "title": "Take the password from the log",
+          "body": "After startup run docker compose logs backend — the generated password is printed there once. Lost it? docker compose exec backend node dist/cli/reset-password.js <email>."
+        },
+        {
+          "title": "Change it when you log in",
+          "body": "With an issued password the only thing you can do is change it: enter the issued one as the current password and set your own."
+        },
+        {
+          "title": "Add everyone else",
+          "body": "People icon in the header → \"Users\": email and role (admin, operator or viewer). The password is shown once — pass it on personally."
+        }
+      ]
+    },
+    "security": {
+      "body": "The private key is encrypted before it's stored and never comes back through the API in full — not in responses, not in build logs, even on a git error. The Docker socket is only reachable by the backend process and is never mounted into the build container.\n\nThe terminal is admin-only, requires re-entering your password right before a session starts (separately from your regular login), and every session opened is written to the audit log. A shell into a project's workdir runs in a throwaway container with no network access, dropped capabilities and the same CPU/memory/process limits as a build step — never on the host directly."
+    },
+    "roadmap": {
+      "body": "Deploy with automatic rollback (including a manual rollback to any earlier successful deployment), a list of host containers, scheduled builds and builds from a chosen branch, a read-only file browser for the latest checkout, host/container metrics, three roles (admin/operator/viewer) with user management, an audit log, an admin-only terminal and a public status page at /status are implemented.\n\nThe project moves in iterations: the first one (project → build → log), the second (deploy & containers) and the third (metrics) are done. The fourth (roles, audit, terminal) and the fifth (branches, status page, users) are implemented but haven't been checked on the server yet, so they aren't closed."
+    }
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "login": "Log in",
+    "logout": "Log out",
+    "noAccount": "No account? Ask an administrator to create one."
+  },
+  "account": {
+    "title": "Account",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "submit": "Change password",
+    "mismatch": "Passwords don't match",
+    "success": "Password changed",
+    "forceTitle": "Set your own password",
+    "forceHint": "{{email}} is using a password issued by the system. Change it to continue — enter the issued password as the current one."
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "There's no self-registration — accounts are created here. The generated password is shown once; the user must change it on first login.",
+    "create": "New user",
+    "createSubmit": "Create",
+    "rolesHint": "admin — everything, including users, terminal and deploy keys; operator — builds, deploys, rollbacks, projects; viewer — read-only.",
+    "roles": {
+      "admin": "admin",
+      "operator": "operator",
+      "viewer": "viewer"
+    },
+    "you": "you",
+    "active": "Active",
+    "disabled": "Disabled",
+    "pendingPassword": "Must change password",
+    "resetPassword": "Reset password",
+    "disable": "Disable",
+    "enable": "Enable",
+    "issued": "Password for {{email}}:",
+    "issuedHint": "It won't be shown again. Pass it on personally — the user will have to change it on first login.",
+    "issuedDone": "Done, hide",
+    "copy": "Copy",
+    "forbidden": "Not enough permissions"
+  },
+  "projects": {
+    "new": {
+      "title": "New project",
+      "name": "Name",
+      "gitUrl": "SSH repository URL",
+      "branch": "Branch",
+      "branchHint": "Fill in the URL and deploy key above, then click \"Check repository\" to pick a real branch instead of typing it blind.",
+      "checkRepository": "Check repository",
+      "checking": "Checking…",
+      "checkFailed": "Could not fetch branches",
+      "checkSuccess": "Repository connected, branches available: {{count}}",
+      "deployKey": "Deploy key (private key, read-only)",
+      "deployKeyHint": "Generate a dedicated key: ssh-keygen -t ed25519 -f deploy_key. Add the public half to the repo as a read-only deploy key, paste the private half here — it's encrypted before it's stored.",
+      "commandsTitle": "Build commands",
+      "commandsHint": "Run in order inside an isolated container: install → test → build. Leave a field empty to skip that step. At least one command is required.",
+      "needCommand": "Fill in at least one command — install, test or build",
+      "installCmd": "Install",
+      "testCmd": "Test",
+      "buildCmd": "Build",
+      "presets": {
+        "custom": "Custom commands",
+        "npm": "Node (npm)",
+        "bun": "Node (bun)",
+        "python": "Python"
+      },
+      "trigger": "Trigger",
+      "triggerManual": "Manual",
+      "triggerCron": "Scheduled",
+      "autoBuild": "Build right after creating",
+      "deployTitle": "Deploy (optional)",
+      "deployHint": "Fill in both ports if the repository has a Dockerfile — after a successful build Ranger will build an image from it, stop the project's previous container and start a new one. Without a Dockerfile at the repo root, the deploy step fails with a clear error.",
+      "containerPort": "Container port",
+      "hostPort": "Host port",
+      "deployPortsRequired": "Fill in both ports — container and host — or collapse the deploy section",
+      "submit": "Create"
+    },
+    "overview": {
+      "gitUrl": "Repository",
+      "branch": "Branch",
+      "trigger": "Trigger",
+      "installCmd": "Install",
+      "testCmd": "Test",
+      "buildCmd": "Build",
+      "deployKeyTitle": "Deploy key",
+      "deployKeySet": "Configured",
+      "deployKeyMissing": "Not configured",
+      "edit": "Edit",
+      "actions": "Actions",
+      "commits": "Recent commits",
+      "commitsLoading": "Loading commits…",
+      "commitsError": "Could not fetch commits",
+      "deployment": "Deployment",
+      "port": "Port",
+      "deploymentStatus": "Status",
+      "deploymentNone": "Not deployed yet",
+      "deploymentRunning": "Running",
+      "deploymentRolledBack": "Rolled back",
+      "deploymentFailed": "Failed",
+      "deploymentAt": "Last deployed",
+      "deploymentHistory": "Deployment history",
+      "deploymentHistoryEmpty": "No deployments yet",
+      "rollback": "Roll back",
+      "rollingBack": "Rolling back…",
+      "rollbackCurrent": "Current"
+    },
+    "edit": {
+      "title": "Edit project",
+      "submit": "Save",
+      "cancel": "Cancel",
+      "deployKeyHint": "The key can't be edited partially — only replaced with a new one entirely.",
+      "replaceDeployKey": "Replace key",
+      "replaceDeployKeyConfirm": "Replace",
+      "replaceDeployKeyWarning": "The old key will be fully removed and stop working as soon as you save.",
+      "deployKeyReplaced": "Key replaced",
+      "revealDeployKey": "Reveal key",
+      "revealDeployKeyHint": "Only visible to admins. Recorded in the audit log every time.",
+      "hideDeployKey": "Hide",
+      "isPublic": "Show on the public status page",
+      "isPublicHint": "Anyone without logging in will see the project name, status and time of its latest build — no logs, repository or branches. Page:",
+      "dangerZone": "Danger zone",
+      "deleteHint": "Deletes the project entirely: settings, build and deployment history, the deploy key. If the project is deployed, its container is stopped and removed too. This can't be undone.",
+      "delete": "Delete project",
+      "deleteConfirm": "Delete project \"{{name}}\" for good? This can't be undone.",
+      "deleteConfirmButton": "Yes, delete permanently",
+      "deleting": "Deleting…"
+    },
+    "env": {
+      "title": "Environment variables",
+      "hint": "Passed to the install/test/build steps and to the deployed container. Values are stored encrypted and never shown after saving; long values are masked in the build log. Changes apply from the next build or deploy.",
+      "empty": "No variables yet",
+      "key": "Name",
+      "value": "Value",
+      "keepValue": "saved — leave empty to keep",
+      "remove": "Remove variable",
+      "add": "Add variable",
+      "import": "Paste from .env",
+      "importHint": "KEY=value format, one variable per line. Variables with an existing name get the new value.",
+      "importApply": "Add to list",
+      "importBadLines": "Could not parse lines: {{lines}}",
+      "save": "Save variables",
+      "saved": "Variables saved",
+      "reveal": "Show values",
+      "revealHint": "Visible to admins only. Every reveal is recorded in the audit log.",
+      "hide": "Hide"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Секреты: реальные значения только на сервере, в репозитории — шаблоны
+.env
+.env.*
+!.env.example
+
+# Локальные данные dev-запуска: чекауты сборок и их логи
+.devdata/
+apps/backend/data/
+
+# Личные файлы разработки, не часть проекта
+HANDOFF.md
+.claude/settings.local.json

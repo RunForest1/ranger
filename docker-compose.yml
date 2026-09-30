@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ranger
+      POSTGRES_PASSWORD: ranger
+      POSTGRES_DB: ranger
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ranger"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ranger:ranger@postgres:5432/ranger
+      SESSION_SECRET: ${SESSION_SECRET:?укажите SESSION_SECRET в .env}
+      DEPLOY_KEY_ENCRYPTION_KEY: ${DEPLOY_KEY_ENCRYPTION_KEY:?укажите DEPLOY_KEY_ENCRYPTION_KEY в .env}
+      PORT: 3000
+      BUILD_LOGS_DIR: /data/build-logs
+      BUILD_WORKDIR_CONTAINER_PATH: /data/build-workdir
+      # Тот же абсолютный путь, что источник bind-mount ниже — backend ходит в Docker
+      # через сокет хоста, и Docker-демон резолвит bind-mount'ы контейнеров сборки
+      # относительно ХОСТА, а не относительно самого backend-контейнера.
+      BUILD_WORKDIR_HOST_PATH: ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}
+      # Email первого администратора — используется только при старте на пустой базе,
+      # сгенерированный пароль печатается в `docker compose logs backend`.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    volumes:
+      # Сокет только в backend — никогда не пробрасывается в контейнеры сборки/деплоя (раздел 7 CLAUDE.md).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - build-logs:/data/build-logs
+      - ${RANGER_WORKDIR_HOST_PATH:?укажите абсолютный путь в .env, см. README}:/data/build-workdir
+
+  frontend:
+    build: ./apps/frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres-data:
+  build-logs:

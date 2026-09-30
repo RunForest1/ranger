@@ -1,0 +1,14 @@
+{
+  "name": "ranger",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:backend": "bun --filter ranger-backend dev",
+    "dev:frontend": "bun --filter ranger-frontend dev",
+    "build": "bun --filter ranger-backend build && bun --filter ranger-frontend build",
+    "lint": "bun --filter ranger-backend lint && bun --filter ranger-frontend lint"
+  }
+}

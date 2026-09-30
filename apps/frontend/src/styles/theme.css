@@ -1,0 +1,60 @@
+/* Токены цвета для обеих тем (раздел 6 CLAUDE.md). Значение переменной меняется
+   в зависимости от темы — сам набор имён переменных один и тот же.
+   *-soft — приглушённые подложки для бейджей: заданы отдельными hex-значениями,
+   а не через Tailwind opacity-модификатор (/15), потому что тот требует RGB-триплет
+   в переменной, а не hex — с hex он просто ломается молча. */
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #eceef2;
+  --color-border: #d8dbe1;
+  --color-text: #1a1d23;
+  --color-text-muted: #5b616e;
+  --color-accent: #2f6feb;
+  --color-accent-contrast: #ffffff;
+  --color-accent-soft: #e4ecfd;
+  --color-success: #1a7f4e;
+  --color-success-soft: #e1f3e9;
+  --color-warning: #a15c00;
+  --color-warning-soft: #f7ecdb;
+  --color-danger: #c22b2b;
+  --color-danger-soft: #fae3e3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #14161a;
+    --color-surface: #1c1f26;
+    --color-surface-alt: #23262e;
+    --color-border: #33373f;
+    --color-text: #e7e9ee;
+    --color-text-muted: #9198a6;
+    --color-accent: #5b8def;
+    --color-accent-contrast: #0b1220;
+    --color-accent-soft: #1e2a44;
+    --color-success: #3ecf8e;
+    --color-success-soft: #17362a;
+    --color-warning: #e0a83a;
+    --color-warning-soft: #3a2f16;
+    --color-danger: #f26666;
+    --color-danger-soft: #3d2020;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #14161a;
+  --color-surface: #1c1f26;
+  --color-surface-alt: #23262e;
+  --color-border: #33373f;
+  --color-text: #e7e9ee;
+  --color-text-muted: #9198a6;
+  --color-accent: #5b8def;
+  --color-accent-contrast: #0b1220;
+  --color-accent-soft: #1e2a44;
+  --color-success: #3ecf8e;
+  --color-success-soft: #17362a;
+  --color-warning: #e0a83a;
+  --color-warning-soft: #3a2f16;
+  --color-danger: #f26666;
+  --color-danger-soft: #3d2020;
+}

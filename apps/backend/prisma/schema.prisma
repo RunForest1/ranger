@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// admin — всё, включая пользователей, терминал и расшифровку deploy-key;
+// operator — сборки, деплой, откат, проекты; viewer — только просмотр (итерация 5).
+enum UserRole {
+  admin
+  operator
+  viewer
+}
+
+enum TriggerMode {
+  cron
+  manual
+}
+
+enum BuildStatus {
+  queued
+  running
+  success
+  failed
+  rolled_back
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(operator)
+  // Пароль сгенерирован системой (первый admin, создание или сброс в админке) —
+  // до смены на свой доступна только смена пароля (session.guard.ts).
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+  // Вместо удаления: записи журнала аудита ссылаются на пользователя, и история
+  // "кто что сделал" должна переживать уход человека.
+  disabled     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  projects  Project[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String      @id @default(uuid())
+  name        String
+  gitUrl      String      @map("git_url")
+  branch      String      @default("main")
+  ownerId     String      @map("owner_id")
+  owner       User        @relation(fields: [ownerId], references: [id])
+  installCmd  String?     @map("install_cmd")
+  testCmd     String?     @map("test_cmd")
+  buildCmd    String?     @map("build_cmd")
+  triggerMode TriggerMode @default(manual) @map("trigger_mode")
+  cronExpr    String?     @map("cron_expr")
+
+  // Оба поля заданы либо оба пусты — деплой шаг включается, только если задано и то,
+  // и другое (см. валидацию в projects.service.ts). Порт хоста, на который публикуется
+  // контейнер, и порт, который слушает приложение внутри него — см. раздел 5 CLAUDE.md
+  // (итерация 2: "остановка старого контейнера → запуск нового → health-check").
+  containerPort Int?      @map("container_port")
+  hostPort      Int?      @map("host_port")
+
+  // Показывать ли проект на публичной странице статуса (итерация 5) — по умолчанию
+  // нет: анонимно видно только то, что явно разрешили.
+  isPublic      Boolean   @default(false) @map("is_public")
+
+  // Переменные окружения для шагов сборки и для задеплоенного контейнера. Значения —
+  // секреты: хранятся одним зашифрованным JSON-объектом и не выбираются в API-ответы
+  // (см. projectSelect в projects.service.ts). Имена отдельно и открыто — чтобы
+  // показывать список переменных без расшифровки.
+  envKeys       String[]  @default([]) @map("env_keys")
+  encryptedEnv  String?   @map("encrypted_env")
+
+  deployKey   DeployKey?
+  builds      Build[]
+  deployments Deployment[]
+
+  @@map("projects")
+}
+
+// Приватный ключ шифруется на уровне приложения (не полагаемся на шифрование диска)
+// и никогда не возвращается целиком в API-ответах — см. раздел 4 CLAUDE.md.
+model DeployKey {
+  id                  String  @id @default(uuid())
+  projectId           String  @unique @map("project_id")
+  project             Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  encryptedPrivateKey String  @map("encrypted_private_key")
+
+  @@map("deploy_keys")
+}
+
+model Build {
+  id          String      @id @default(uuid())
+  projectId   String      @map("project_id")
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      BuildStatus @default(queued)
+  // Ветка этого запуска — может отличаться от project.branch (ручной выбор ветки,
+  // итерация 5). Деплоится только сборка основной ветки проекта (build-runner.service.ts).
+  branch      String
+  // 'cron' либо id пользователя, запустившего сборку вручную — см. раздел 4 CLAUDE.md
+  triggeredBy String      @map("triggered_by")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  startedAt   DateTime?   @map("started_at")
+  finishedAt  DateTime?   @map("finished_at")
+  steps       Json        @default("[]")
+
+  testResults TestResult[]
+  deployments Deployment[]
+
+  @@map("builds")
+}
+
+model TestResult {
+  id      String  @id @default(uuid())
+  buildId String  @map("build_id")
+  build   Build   @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  passed  Boolean
+  output  String
+
+  @@map("test_results")
+}
+
+model Deployment {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  buildId     String   @map("build_id")
+  build       Build    @relation(fields: [buildId], references: [id])
+  containerId String?  @map("container_id")
+  // Тег образа, который deploy-runner собрал и попытался запустить для этой сборки —
+  // нужен, чтобы найти, на какой образ откатываться при следующей неудачной попытке.
+  imageTag    String   @map("image_tag")
+  status      String
+  deployedAt  DateTime @default(now()) @map("deployed_at")
+  rolledBack  Boolean  @default(false) @map("rolled_back")
+
+  @@map("deployments")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  target    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_log")
+}
