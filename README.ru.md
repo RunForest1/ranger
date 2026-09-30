@@ -374,7 +374,7 @@ Compose** и путь к файлу относительно корня репо
 2. Выполняется:
    ```bash
    docker compose -p ranger-compose-<id проекта> -f <файл> \
-     up -d --build --remove-orphans --wait --wait-timeout 120
+     up -d --build --remove-orphans --wait --wait-timeout 300
    ```
    `--build` собирает образы сервисов, у которых указан `build:`. `--wait` ждёт,
    пока все сервисы запустятся, а сервисы с `healthcheck` — станут healthy.
@@ -733,7 +733,7 @@ Ranger volume должен быть `${RANGER_WORKDIR_HOST_PATH}:${RANGER_WORKDI
 деплоя не совпадает с репозиторием — исправьте его в карточке «Режим деплоя».
 
 **Compose-деплой падает на `--wait`.** Какой-то сервис завершился или не стал
-healthy за 120 секунд. В логе сборки есть вывод compose; логи самого сервиса — на
+healthy за 5 минут. В логе сборки есть вывод compose; логи самого сервиса — на
 странице «Контейнеры» или `docker compose -p ranger-compose-<id> logs`.
 
 **Compose-сервисы не поднялись после перезагрузки сервера.** В compose-файле нет

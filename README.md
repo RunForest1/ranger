@@ -372,7 +372,7 @@ After install/test/build succeed:
 2. Ranger runs:
    ```bash
    docker compose -p ranger-compose-<project id> -f <file> \
-     up -d --build --remove-orphans --wait --wait-timeout 120
+     up -d --build --remove-orphans --wait --wait-timeout 300
    ```
    `--build` builds images for services with `build:`. `--wait` waits for every
    service to start and for services with a `healthcheck` to become healthy.
@@ -731,7 +731,7 @@ repository).** The file path in the deploy mode doesn't match the repository —
 in the "Deploy mode" card.
 
 **Compose deploy fails at `--wait`.** A service exited or didn't become healthy within
-120 seconds. The build log has compose's output; the service's own logs are on the
+5 minutes. The build log has compose's output; the service's own logs are on the
 "Containers" page or via `docker compose -p ranger-compose-<id> logs`.
 
 **Compose services didn't come back after a server reboot.** The compose file lacks

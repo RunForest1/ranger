@@ -10,7 +10,10 @@ import { composeProjectName } from './container-naming';
 // Потолок на весь `up` вместе со сборкой образов — как таймаут шага сборки: зависший
 // compose не должен навсегда занимать очередь проекта.
 const COMPOSE_TIMEOUT_MS = 20 * 60 * 1000;
-const WAIT_TIMEOUT_S = 120;
+// С запасом на сервисы, которые на старте делают долгую работу (миграции, импорт
+// данных) и становятся healthy не сразу.
+const WAIT_TIMEOUT_S = 300;
+const FAILURE_LOG_LINES = 50;
 // Текущий деплой и предыдущий: контейнеры предыдущего ещё могут ссылаться на свою
 // директорию, пока compose не пересоздаст их.
 const KEPT_DEPLOY_DIRS = 2;
@@ -82,6 +85,13 @@ export class ComposeDeployService {
         `[ranger] docker compose завершился с кодом ${exitCode ?? 'нет (остановлен)'} — деплой не удался. ` +
           'Сервисы оставлены как есть: отката для compose-деплоя нет.',
       );
+      // `up` сообщает только «unhealthy» или «exited», а причина — в логах самого
+      // сервиса. Без них её пришлось бы искать через docker logs руками (раздел 8 CLAUDE.md).
+      const composeOptions = { cwd: deployDir, projectId, env, onLog };
+      onLog('[ranger] состояние сервисов:');
+      await this.runCompose(['-f', composeFile, 'ps', '-a'], composeOptions);
+      onLog(`[ranger] последние ${FAILURE_LOG_LINES} строк логов каждого сервиса:`);
+      await this.runCompose(['-f', composeFile, 'logs', '--no-color', '--tail', String(FAILURE_LOG_LINES)], composeOptions);
       await this.recordDeployment(projectId, buildId, 'failed');
       return false;
     }
